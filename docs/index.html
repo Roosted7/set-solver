@@ -91,7 +91,7 @@
 <body>
 <div id="intro">
   <h1>SET!</h1>
-  <p>Point the phone at the table, from overhead or from where you sit. Everything runs on this device. When all cards are down and still, it calls out a set and outlines it.</p>
+  <p>Point the phone at the table, from overhead or from where you sit. Everything runs on this device. It calls out a set as soon as it has read the three cards of that set, and outlines it.</p>
   <button id="introBtn">Start camera</button>
   <p class="small" id="loadMsg">Loading models…</p>
   <p class="small"><a href="#" id="introPhoto" style="color:var(--dim)">or try it on a photo</a></p>
@@ -121,24 +121,15 @@
 
 <div id="settings">
   <h3>Settings <button id="closeSettings">Done</button></h3>
-  <label>Call a set once there are
+  <label>Say “no set, deal 3 more” from
     <select id="minCards">
-      <option value="3">any 3+ cards</option>
-      <option value="9">9+ cards</option>
-      <option value="12" selected>12+ cards</option>
-      <option value="15">15+ cards</option>
-    </select></label>
-  <label>Detector quality
-    <select id="detSize">
-      <option value="auto" selected>auto (by speed)</option>
-      <option value="320">320 (fastest)</option>
-      <option value="480">480</option>
-      <option value="640">640 (far/small cards)</option>
+      <option value="3">3 cards</option>
+      <option value="9">9 cards</option>
+      <option value="12" selected>12 cards</option>
+      <option value="15">15 cards</option>
     </select></label>
   <label>Camera resolution
     <select id="camRes"><option value="1080">1080p</option><option value="1440" selected>1440p</option><option value="2160">4K</option></select></label>
-  <label>Flatten cards (angled views)
-    <select id="rectify"><option value="on" selected>on</option><option value="off">off</option></select></label>
   <label>Card labels
     <select id="showLabels"><option value="1" selected>on</option><option value="0">off</option></select></label>
   <label>Sound
@@ -146,12 +137,12 @@
   <label id="soundFileRow" style="display:none">Recording <input type="file" id="soundFile" accept="audio/*"></label>
   <label>Camera <select id="camSelect"></select></label>
   <label>Debug overlay
-    <select id="debug"><option value="off" selected>off</option><option value="on">corners + search area</option><option value="sharp">on + sharp crops</option></select></label>
+    <select id="debug"><option value="off" selected>off</option><option value="on">on (boxes, search area, certainty)</option></select></label>
   <label>Test on a photo <input type="file" id="photoFile" accept="image/*"></label>
   <div class="hint"><span id="backendInfo"></span> Camera: <span id="camInfo">–</span>.<br>
-    Tap the picture to cycle through sets. Dashed outlines are cards that are hidden right now; “?” means not sure yet.</div>
+    Tap the picture to pick another set. Dashed outlines are cards that are hidden right now; “?” means not read for sure yet.</div>
 </div>
 
-<script type="module" src="app.js"></script>
+<script type="module" src="js/main.js"></script>
 </body>
 </html>

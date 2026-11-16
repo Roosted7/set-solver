@@ -39,3 +39,12 @@ dist/
 showcase*.html
 yolo11n.pt
 training_images_synthetic
+
+# Local working folders (v3): datasets, videos, training runs, scratch output, archives
+/data/
+/runs/
+/scratch/
+/archive/
+
+# replay harness deps
+node_modules/

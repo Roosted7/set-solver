@@ -1,59 +1,67 @@
-# SET! — on-device Set solver (web)
+# SET! — on-device Set solver (web, v3)
 
-Runs entirely in the phone's browser: no server, no upload. Built on the trained models from
-[wangtian24/set-solver](https://github.com/wangtian24/set-solver) (YOLO11n card detector +
-MobileNetV3-small classifier), converted to ONNX and run with onnxruntime-web
-(WebGPU where available, otherwise WebAssembly).
+Runs entirely in the phone's browser: no server, no upload. Two small models run with
+onnxruntime-web on WebGPU (WebAssembly as fallback):
+
+- **Card detector:** YOLO26n-OBB, which finds each card as a rotated box at 640 px.
+- **Card reader:** MobileNetV4-small, which reads number, colour, shape and fill from a 96×144 crop
+  and also says whether the crop is a fully visible card.
+
+Both are trained from scratch-made synthetic tables (`src/synth/`, `scripts/v3/`). Your own game
+videos can be added as extra training data and are used as the test set.
 
 ## Run it on your phone
 
-The camera only works over **https** (or `localhost`), so host the folder somewhere with HTTPS.
+The camera only works over **https** (or `localhost`). GitHub Pages serves this `docs/` folder.
+Locally: `python3 -m http.server 8000` in this folder, then open `http://localhost:8000`.
 
-**GitHub Pages (easiest):**
-1. Create a new repo, upload everything in this folder (keep the `models/` folder).
-2. Settings → Pages → Deploy from branch → `main`, `/ (root)`.
-3. Open `https://<you>.github.io/<repo>/` on the phone, then *Add to Home Screen* for a full-screen app.
+## How it decides (v3)
 
-**Local test on a PC:** `python3 -m http.server 8000` in this folder, then open
-`http://localhost:8000`. Use *⚙︎ → Test on a photo* if the PC has no camera.
+- **Every card on its own.** Each card is tracked and read separately. A set is called as soon as
+  *its own three cards* are read reliably. A hand, a card being dealt, or a misread card elsewhere on
+  the table no longer blocks everything.
+- **Reliable reading.** A card counts as known when its last two readings agree and the combined
+  certainty is high. The reader is calibrated, so "90% sure" means roughly that. A card that was
+  covered, moved, or swapped is read again before it is trusted.
+- **Compute where it matters.** New, uncovered and moved cards are read first. Known cards get a
+  quick re-check about every 0.7 s. Reading may take up to half as long as detecting (at least
+  40 ms), so a fast phone reads every card that needs it each step and a slow one a few.
+- **No lock-in.** The detector searches the whole frame every other step and a region around the
+  cards in between, so it can't get stuck on part of the table. It always runs at 640 px; the
+  320/480 fallbacks are gone because they couldn't see the cards.
+- **Sets stay up** until one of their cards is picked up. Several sets are shown in different colours.
+- Models are loaded one after another, so both get WebGPU. Settings → bottom line shows the backend
+  per model.
 
-## Using it
+## How well it works (test video, 1080p, warm indoor light)
 
-- **Lens buttons** (0.5× / 1× / Tele / Auto) appear when the phone exposes several back cameras.
-  iPhone Safari names them, so the ultra-wide is picked automatically the first time.
-  Android Chrome often shows generic names ("Lens 1, 2, 3"); try each one. On some Android
-  phones a **zoom slider** going below 1× switches to the ultra-wide instead.
-- **🔦 Flash** appears only when the browser supports torch control for the current lens
-  (Chrome on Android: yes; iOS Safari: depends on version).
-- It waits until the minimum number of cards is down (default 12, see ⚙︎), each card has been
-  read consistently over a few frames, and the same set has been found twice. Then it says "Set!"
-  and outlines the cards. Tap the screen to cycle through other sets. When the set's cards are
-  picked up, it starts looking again.
-- If there's no set among the cards, it says "deal 3 more".
-- ⚙︎ → Sound: voice, beep, or your own recording (pick an audio file).
-- The dashed rectangle is the region the detector is currently looking at (see below).
+Whole app replayed with the video as camera (headless Chromium on single-threaded WASM, about 3
+steps/s, so a phone is faster). Last 36 s of the video were never used for training.
 
-## How it decides
+| | v1 | v2 | v3 |
+|---|---|---|---|
+| Sets on the table ≥1.5 s that got called | 2 of 10 | 0 of 10 | 9 of 10 |
+| Wrong "Set!" calls | most calls | none (no calls) | 0 of 11 |
+| Median time to call | 8.3 s | – | 1.0 s |
+| Single-frame card reads correct (test part) | 76% | 76% | 99% |
 
-- **Per-card evidence.** Every card is tracked across frames and keeps adding up the classifier's
-  log-probabilities per attribute. One bad frame (glare, a hand's shadow) can't flip a card, and a card
-  only counts once each attribute is ≥98.5% certain.
-- **Only read what's needed.** New, uncertain or recently hidden cards are classified first (twice, also
-  rotated 180°). Cards already known are re-checked every ~2.5 s. When the picture doesn't change, the
-  detector is skipped too.
-- **Flattened cards.** Each card's four corners are found and the card is warped flat before classifying,
-  which helps with angled (player's-eye) views and keeps neighbouring cards out of the crop.
-- **Settled table.** A set is only called when no card is moving or hidden (e.g. by a dealing hand), all
-  cards are certain and no card appears twice. Sets stay highlighted until their cards are picked up.
-- **Auto quality.** The detector runs at 640 px when the phone is fast enough, otherwise 480 or 320.
+The one missed set had its third card still in the dealer's hand.
+
+## Files
+
+- `index.html`: layout and settings
+- `js/main.js`: main loop (detect → track → read → call)
+- `js/runtime.js`: onnxruntime-web set-up and model loading
+- `js/detect.js`: detector pre- and post-processing
+- `js/classify.js`: straight card crops (GPU canvas) and the reader
+- `js/tracker.js`: card tracks, evidence, what to read next
+- `js/sets.js`: calling sets
+- `js/draw.js`: overlay and set list
+- `js/camera.js`, `js/sound.js`, `js/geometry.js`: camera, sound and geometry helpers
+- `models/`: `detector_v3.onnx`, `classifier_v3.onnx`
 
 ## Notes
 
-- The detector was trained on photos where the cards fill most of the frame, so with a wide-angle
-  lens it detects on a crop around the cards. When it has lost the cards, it tries progressively
-  smaller centre crops. Keep the layout roughly central when starting.
-- Very low angles (camera less than ~25° above the table) are still hard: the detector misses the far row.
-  Retraining it (e.g. YOLO26n) on more steeply angled synthetic boards is the next step.
 - onnxruntime-web is loaded from the jsDelivr CDN.
-- Licences: the original repo is MIT. The detector is an Ultralytics YOLO11 model, and Ultralytics
+- Licences: the original repo is MIT. The detector is an Ultralytics YOLO26 model, and Ultralytics
   models are AGPL-3.0. That's fine for a personal demo; check it before distributing anything.
