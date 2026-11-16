@@ -37,6 +37,14 @@ python -m src.inference.solve photo.jpg \
   --show                  # open result in image viewer
 ```
 
+## On-device web app (phone, no server)
+
+`docs/` is a static web app that runs the same detector and classifier **in the browser**
+(onnxruntime-web, WebGPU or WebAssembly): no upload and no server latency. It adds a lens picker
+for the ultra-wide camera, a zoom slider, flash/torch control, multi-frame voting, and a
+"Set!" call-out once all cards are down. GitHub Pages serves it from `main` → `/docs`.
+See [docs/README.md](docs/README.md). The ONNX files are made with `scripts/export_onnx.py`.
+
 ## Live Camera Web App
 
 A real-time web interface that uses your camera to scan for Sets continuously.
