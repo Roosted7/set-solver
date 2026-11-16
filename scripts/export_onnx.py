@@ -10,7 +10,7 @@ Weights: https://huggingface.co/wangtianthu/set-solver-models
   detector/weights/best.pt  and  classifier/classifier_best.pt
 
 Produces:
-  detector_480.onnx, detector_640.onnx   input [1,3,S,S] RGB 0..1, letterboxed (pad 114)
+  detector_{320,480,640}.onnx      input [1,3,S,S] RGB 0..1, letterboxed (pad 114)
                                           output [1,5,N] = cx,cy,w,h,score (no NMS)
   classifier.onnx                         input [n,3,224,224] RGB 0..1 (ImageNet normalisation
                                           is baked in), output [n,12] logits =
@@ -76,7 +76,7 @@ def main():
     ap.add_argument("--detector", type=Path, default=Path("weights/detector/weights/best.pt"))
     ap.add_argument("--classifier", type=Path, default=Path("weights/classifier_best.pt"))
     ap.add_argument("--out", type=Path, default=Path("docs/models"))
-    ap.add_argument("--sizes", type=int, nargs="+", default=[480, 640])
+    ap.add_argument("--sizes", type=int, nargs="+", default=[320, 480, 640])
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     export_classifier(args.classifier, args.out / "classifier.onnx")

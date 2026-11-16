@@ -33,12 +33,27 @@ The camera only works over **https** (or `localhost`), so host the folder somewh
 - ⚙︎ → Sound: voice, beep, or your own recording (pick an audio file).
 - The dashed rectangle is the region the detector is currently looking at (see below).
 
+## How it decides
+
+- **Per-card evidence.** Every card is tracked across frames and keeps adding up the classifier's
+  log-probabilities per attribute. One bad frame (glare, a hand's shadow) can't flip a card, and a card
+  only counts once each attribute is ≥98.5% certain.
+- **Only read what's needed.** New, uncertain or recently hidden cards are classified first (twice, also
+  rotated 180°). Cards already known are re-checked every ~2.5 s. When the picture doesn't change, the
+  detector is skipped too.
+- **Flattened cards.** Each card's four corners are found and the card is warped flat before classifying,
+  which helps with angled (player's-eye) views and keeps neighbouring cards out of the crop.
+- **Settled table.** A set is only called when no card is moving or hidden (e.g. by a dealing hand), all
+  cards are certain and no card appears twice. Sets stay highlighted until their cards are picked up.
+- **Auto quality.** The detector runs at 640 px when the phone is fast enough, otherwise 480 or 320.
+
 ## Notes
 
 - The detector was trained on photos where the cards fill most of the frame, so with a wide-angle
   lens it detects on a crop around the cards. When it has lost the cards, it tries progressively
   smaller centre crops. Keep the layout roughly central when starting.
-- Detector resolution 480 is faster; 640 helps when the cards are far away.
+- Very low angles (camera less than ~25° above the table) are still hard: the detector misses the far row.
+  Retraining it (e.g. YOLO26n) on more steeply angled synthetic boards is the next step.
 - onnxruntime-web is loaded from the jsDelivr CDN.
 - Licences: the original repo is MIT. The detector is an Ultralytics YOLO11 model, and Ultralytics
   models are AGPL-3.0. That's fine for a personal demo; check it before distributing anything.

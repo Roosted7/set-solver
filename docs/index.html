@@ -7,56 +7,80 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>SET! — on-device solver</title>
 <style>
-  :root { --bg:#000; --fg:#f2f2f2; --dim:#9a9a9a; --accent:#ffd400; --panel:rgba(20,20,20,.82); }
+  :root { --fg:#f2f2f2; --dim:#9a9a9a; --accent:#ffd400; --panel:#1b1b1b; --line:#ffffff24; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg);
+  html,body { margin:0; height:100%; background:#000; color:var(--fg);
     font:15px/1.3 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; overflow:hidden; }
-  #stage { position:fixed; inset:0; }
+
+  /* Layout: controls never cover the camera image.
+     Portrait: status on top, camera, then sets / lenses / buttons below.
+     Landscape: status + lenses on the left, buttons + sets on the right. */
+  #app { position:fixed; inset:0; display:grid; gap:6px;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    grid-template-columns:1fr;
+    grid-template-rows:auto minmax(0,1fr) auto auto auto;
+    grid-template-areas:"status" "stage" "sets" "cam" "act"; }
+  @media (orientation: landscape) {
+    #app { grid-template-columns:minmax(120px,17vw) minmax(0,1fr) minmax(130px,19vw);
+      grid-template-rows:auto minmax(0,1fr);
+      grid-template-areas:"status stage act" "cam stage sets"; }
+    #cam, #act { flex-direction:column; align-items:stretch; }
+    #act button { width:100%; }
+    #lensButtons { flex-wrap:wrap; justify-content:flex-start; }
+    #zoomRow { flex-direction:column; align-items:stretch; }
+    #setList { flex-direction:column; overflow-y:auto; overflow-x:hidden; }
+    .setItem { align-items:flex-start; font-size:11.5px; }
+    .setItem .names { flex-direction:column; gap:1px; }
+    .setItem i { margin-top:3px; }
+    #statusBox { padding-top:8px; }
+  }
+  #statusBox { grid-area:status; padding:6px 10px 0; min-width:0; }
+  #status { font-weight:650; font-size:16px; }
+  #stats { color:var(--dim); font-variant-numeric:tabular-nums; font-size:12px; white-space:pre; margin-top:2px; }
+  #stage { grid-area:stage; position:relative; min-height:0; min-width:0; overflow:hidden; background:#000; }
   #video, #still, #overlay { position:absolute; inset:0; width:100%; height:100%; }
-  #video { object-fit:contain; background:#000; }
+  #video, #still { object-fit:contain; }
   #still { display:none; }
   #overlay { pointer-events:none; }
+  #cam { grid-area:cam; display:flex; gap:8px; align-items:center; justify-content:center; padding:0 10px; min-width:0; }
+  #act { grid-area:act; display:flex; gap:8px; align-items:center; justify-content:center; padding:0 10px 8px; }
+  #sets { grid-area:sets; min-height:0; min-width:0; padding:0 8px; }
+  #setList { display:flex; gap:6px; overflow-x:auto; max-height:100%; }
+  .setItem { display:flex; gap:6px; align-items:center; font-size:12px; text-align:left; border-radius:10px !important;
+    padding:6px 8px !important; min-height:0 !important; white-space:nowrap; flex:0 0 auto; }
+  .setItem .names { display:flex; gap:8px; }
+  .setItem i { width:10px; height:10px; border-radius:3px; display:inline-block; flex:0 0 auto; }
+  .setItem.sel { border-color:var(--accent) !important; }
 
-  #top { position:fixed; left:0; right:0; top:0; padding:calc(env(safe-area-inset-top) + 8px) 12px 8px;
-    display:flex; gap:10px; align-items:center; background:linear-gradient(#000c,#0000); z-index:5; }
-  #status { flex:1; font-weight:600; font-size:16px; }
-  #stats { color:var(--dim); font-variant-numeric:tabular-nums; font-size:13px; text-align:right; }
-
-  #banner { position:fixed; left:50%; top:22%; transform:translate(-50%,-50%) scale(.6); opacity:0;
-    font-size:72px; font-weight:900; letter-spacing:2px; color:var(--accent);
-    text-shadow:0 4px 24px #000, 0 0 2px #000; transition:all .18s ease-out; z-index:6; pointer-events:none; }
-  #banner.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
-
-  #bottom { position:fixed; left:0; right:0; bottom:0; z-index:5;
-    padding:10px 12px calc(env(safe-area-inset-bottom) + 12px);
-    background:linear-gradient(#0000,#000d 40%); display:flex; flex-direction:column; gap:10px; }
-  .row { display:flex; gap:10px; align-items:center; justify-content:center; }
-  button, select { font:inherit; color:var(--fg); background:var(--panel); border:1px solid #ffffff2a;
-    border-radius:999px; padding:10px 16px; min-height:44px; }
+  button, select { font:inherit; color:var(--fg); background:var(--panel); border:1px solid var(--line);
+    border-radius:999px; padding:9px 14px; min-height:42px; }
   button:active { transform:scale(.97); }
   button.on { background:var(--accent); color:#000; border-color:var(--accent); }
-  #startBtn { min-width:120px; font-weight:700; font-size:17px; }
-  #startBtn.running { background:#d33; border-color:#d33; }
-  .lens { display:flex; gap:6px; }
-  .lens button { padding:8px 12px; min-width:52px; }
-  #zoomRow { display:none; color:var(--dim); font-size:13px; }
-  #zoomRow input { flex:1; max-width:360px; accent-color:var(--accent); }
-  #zoomVal { min-width:40px; text-align:right; font-variant-numeric:tabular-nums; }
+  #startBtn { min-width:110px; font-weight:700; }
+  #startBtn.running { background:#c62f2f; border-color:#c62f2f; }
+  #nextBtn { background:#2a2a2a; }
+  #lensButtons { display:flex; gap:6px; }
+  #lensButtons button { padding:7px 11px; min-width:50px; min-height:36px; }
+  #zoomRow { display:none; gap:6px; align-items:center; color:var(--dim); font-size:12px; }
+  #zoomRow input { flex:1; min-width:90px; accent-color:var(--accent); }
 
-  #settings { position:fixed; right:12px; left:12px; bottom:calc(env(safe-area-inset-bottom) + 130px); z-index:7;
-    background:#161616f2; border:1px solid #ffffff22; border-radius:16px; padding:14px 16px; display:none;
-    max-width:460px; margin:0 auto; }
+  #banner { position:fixed; left:50%; top:30%; transform:translate(-50%,-50%) scale(.6); opacity:0;
+    font-size:68px; font-weight:900; letter-spacing:2px; color:var(--accent);
+    text-shadow:0 4px 24px #000, 0 0 2px #000; transition:all .18s ease-out; z-index:6; pointer-events:none; white-space:nowrap; }
+  #banner.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
+
+  #settings { position:fixed; inset:auto 12px calc(env(safe-area-inset-bottom) + 12px); z-index:9; max-height:85vh; overflow:auto;
+    background:#161616f5; border:1px solid var(--line); border-radius:16px; padding:12px 16px; display:none; max-width:480px; margin:0 auto; }
   #settings.open { display:block; }
-  #settings h3 { margin:0 0 10px; font-size:15px; }
-  #settings label { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:7px 0;
-    border-bottom:1px solid #ffffff12; }
-  #settings label:last-of-type { border-bottom:0; }
-  #settings select, #settings input[type=file] { max-width:58%; }
-  #settings select { padding:6px 10px; min-height:34px; }
+  #settings h3 { margin:0 0 8px; font-size:15px; display:flex; justify-content:space-between; align-items:center; }
+  #settings h3 button { min-height:32px; padding:4px 12px; }
+  #settings label { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:6px 0; border-bottom:1px solid #ffffff10; }
+  #settings select { padding:5px 10px; min-height:32px; max-width:60%; }
+  #settings input[type=file] { max-width:58%; }
   #settings .hint { color:var(--dim); font-size:12px; margin-top:8px; }
 
   #intro { position:fixed; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center;
-    justify-content:center; gap:18px; padding:24px; text-align:center; background:#000; }
+    justify-content:center; gap:16px; padding:24px; text-align:center; background:#000; }
   #intro h1 { margin:0; font-size:44px; letter-spacing:2px; color:var(--accent); }
   #intro p { margin:0; color:var(--dim); max-width:420px; }
   #intro button { font-size:18px; padding:14px 28px; background:var(--accent); color:#000; font-weight:700; border:0; }
@@ -67,27 +91,36 @@
 <body>
 <div id="intro">
   <h1>SET!</h1>
-  <p>Point the phone at the table. Everything runs on this device. When all cards are down, it calls out a set and outlines it.</p>
+  <p>Point the phone at the table, from overhead or from where you sit. Everything runs on this device. When all cards are down and still, it calls out a set and outlines it.</p>
   <button id="introBtn">Start camera</button>
   <p class="small" id="loadMsg">Loading models…</p>
   <p class="small"><a href="#" id="introPhoto" style="color:var(--dim)">or try it on a photo</a></p>
   <div id="err"></div>
 </div>
 
-<div id="stage">
-  <video id="video" playsinline muted autoplay></video>
-  <canvas id="still"></canvas>
-  <canvas id="overlay"></canvas>
-</div>
-
-<div id="top">
-  <div id="status">Ready</div>
-  <div id="stats"></div>
+<div id="app">
+  <div id="statusBox"><div id="status">Ready</div><div id="stats"></div></div>
+  <div id="stage">
+    <video id="video" playsinline muted autoplay></video>
+    <canvas id="still"></canvas>
+    <canvas id="overlay"></canvas>
+  </div>
+  <div id="sets"><div id="setList"></div></div>
+  <div id="cam">
+    <div id="lensButtons"></div>
+    <div id="zoomRow"><span>zoom</span><input type="range" id="zoom"><span id="zoomVal"></span></div>
+  </div>
+  <div id="act">
+    <button id="startBtn">Start</button>
+    <button id="nextBtn" style="display:none">Next round</button>
+    <button id="torchBtn" style="display:none">🔦 Flash</button>
+    <button id="gearBtn">⚙︎ Settings</button>
+  </div>
 </div>
 <div id="banner">SET!</div>
 
 <div id="settings">
-  <h3>Settings</h3>
+  <h3>Settings <button id="closeSettings">Done</button></h3>
   <label>Call a set once there are
     <select id="minCards">
       <option value="3">any 3+ cards</option>
@@ -95,31 +128,28 @@
       <option value="12" selected>12+ cards</option>
       <option value="15">15+ cards</option>
     </select></label>
-  <label>Detector resolution
+  <label>Detector quality
     <select id="detSize">
-      <option value="480" selected>480 (faster)</option>
-      <option value="640">640 (small/far cards)</option>
+      <option value="auto" selected>auto (by speed)</option>
+      <option value="320">320 (fastest)</option>
+      <option value="480">480</option>
+      <option value="640">640 (far/small cards)</option>
     </select></label>
-  <label>Show card labels
+  <label>Camera resolution
+    <select id="camRes"><option value="1080">1080p</option><option value="1440" selected>1440p</option><option value="2160">4K</option></select></label>
+  <label>Flatten cards (angled views)
+    <select id="rectify"><option value="on" selected>on</option><option value="off">off</option></select></label>
+  <label>Card labels
     <select id="showLabels"><option value="1" selected>on</option><option value="0">off</option></select></label>
   <label>Sound
     <select id="soundMode"><option value="voice" selected>voice “Set!”</option><option value="beep">beep</option><option value="file">my recording…</option><option value="off">off</option></select></label>
-  <label id="soundFileRow" style="display:none">Recording file <input type="file" id="soundFile" accept="audio/*"></label>
+  <label id="soundFileRow" style="display:none">Recording <input type="file" id="soundFile" accept="audio/*"></label>
   <label>Camera <select id="camSelect"></select></label>
+  <label>Debug overlay
+    <select id="debug"><option value="off" selected>off</option><option value="on">corners + search area</option><option value="sharp">on + sharp crops</option></select></label>
   <label>Test on a photo <input type="file" id="photoFile" accept="image/*"></label>
-  <div class="hint" id="backendInfo"></div>
-</div>
-
-<div id="bottom">
-  <div class="row" id="zoomRow"><span>zoom</span><input type="range" id="zoom"><span id="zoomVal"></span></div>
-  <div class="row">
-    <div class="lens" id="lensButtons"></div>
-  </div>
-  <div class="row">
-    <button id="torchBtn" style="display:none">🔦 Flash</button>
-    <button id="startBtn">Start</button>
-    <button id="gearBtn">⚙︎</button>
-  </div>
+  <div class="hint"><span id="backendInfo"></span> Camera: <span id="camInfo">–</span>.<br>
+    Tap the picture to cycle through sets. Dashed outlines are cards that are hidden right now; “?” means not sure yet.</div>
 </div>
 
 <script type="module" src="app.js"></script>
